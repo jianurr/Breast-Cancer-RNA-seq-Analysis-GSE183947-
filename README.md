@@ -1,160 +1,147 @@
-## 🧬 Complete Analysis Code (R)
+#  Breast Cancer RNA-seq Differential Expression and Functional Analysis
 
+This project presents a complete in-silico RNA-seq differential expression and pathway analysis using the publicly available **GSE183947** breast cancer dataset. The objective of the Weblem-3 assignment is to identify differentially expressed genes (DEGs) between **breast tumor** and **normal** tissues and investigate their involvement in relevant biological functions and pathways.
+
+The analysis is performed directly on an **FPKM expression matrix**, and therefore raw read mapping and quantification steps were skipped.
+
+---
+
+##  **Objective**
+To perform differential expression analysis and functional enrichment on breast cancer RNA-seq data, and to explore gene involvement in biological processes, disease associations, and cancer-related pathways.
+
+---
+
+##  **Dataset Information**
+- **Source:** GEO (GSE183947)  
+- **Total Samples:** 60  
+  - **30 Breast Tumor samples**  
+  - **30 Normal tissue samples**  
+- **Data Type:** FPKM (Fragments Per Kilobase of transcript per Million mapped reads)  
+- **Genes Loaded:** 20,246  
+
+FPKM values were used directly for downstream normalization and modeling.
+
+---
+
+##  **Analysis Workflow**
+
+### **1. Data Loading**
+- Imported the FPKM gene expression matrix and sample metadata.  
+- Verified sample distribution: 30 tumors + 30 normals.
+
+### **2. Preprocessing & Filtering**
+- Removed low-expression genes to reduce noise.  
+- Retained genes expressed in at least **2 samples**, ensuring sufficient biological signal.
+
+---
+
+##  **Differential Expression Analysis (limma)**
+- Created a **Tumor vs Normal** design matrix.  
+- Applied **linear modeling** and **empirical Bayes moderation**.  
+- Applied significance thresholds:
+  - **logFC ≥ 1**
+  - **adj.p-value ≤ 0.01**
+- **Total DEGs identified:** **1655 significant genes**
+
+These genes represent those most strongly dysregulated in breast cancer tissue.
+
+---
+
+##  **Visualizations**
+
+### **🔹 Volcano Plot**
+Shows significantly up- and down-regulated genes.  
+Significant DEGs appear clearly highlighted.
+
+### **🔹 Heatmap (Top 20 DEGs)**
+- Displays expression of top 20 DEGs across all 60 samples.  
+- Shows clear separation and clustering of tumor vs normal groups.
+
+### **🔹 Boxplot (Top 5 DEGs)**
+- Compares expression patterns of the top 5 DEGs between tumor and normal samples.  
+- Highlights strong differential expression.
+
+---
+
+##  **Functional Enrichment Analysis**
+
+Performed to understand the biological roles of DEGs:
+
+### **🔹 GO Enrichment (Biological Process)**
+Revealed processes linked to:
+- Cancer progression  
+- Immune response  
+- Cell-cycle alterations  
+- Tissue remodeling  
+
+### **🔹 KEGG Pathway Enrichment**
+Identified pathways such as:
+- Pathways in Cancer  
+- Immune and inflammatory pathways  
+- Viral oncogenesis  
+- Metabolic dysregulation  
+
+---
+
+##  **KEGG Pathway Map – hsa05200 (“Pathways in Cancer”)**
+A customized KEGG pathway map was generated:
+- **Orange:** Up-regulated genes in tumor  
+- **Blue:** Down-regulated genes  
+- **Grey/White:** Unchanged or unmeasured  
+
+This visualization highlights the dysregulated signaling modules in breast cancer.
+
+---
+
+##  **Machine Learning (Optional Task)**
+A **Random Forest model** was trained using the FPKM values of top DEGs.
+
+### Output:
+- A ranked list of genes based on importance in classifying **Tumor vs Normal**.  
+- A bar plot showing gene importance scores.
+
+---
+
+##  **Generated Outputs**
+The analysis produced the following files:
+
+### **Results**
+- `limma_top_table.tsv` — complete DEG list  
+- `annotated_DEGs.tsv` — DEG table with gene annotations  
+
+### **Plots**
+- `volcano.png`  
+- `heatmap_top20.png`  
+- `boxplot_top5.png`  
+- `GO_enrichment.png`  
+- `KEGG_enrichment.png`  
+- `kegg_pathway_hsa05200.png`  
+- `rf_gene_importance.png`
+
+---
+
+##  **How to Run This Project**
+
+### 1. Place Data in `/data`
+- `fpkm_matrix.tsv`  
+- `sample_metadata.tsv`
+
+### 2. Install Required Packages
 ```r
-# ---------------------------------------------------------
-# Load Required Libraries
-# ---------------------------------------------------------
-library(readr)           # data loading
-library(dplyr)           # data manipulation
-library(limma)           # differential expression
-library(edgeR)           # filtering utilities
-library(ggplot2)         # visualizations
-library(ggrepel)         # volcano plot labels
-library(pheatmap)        # heatmaps
-library(clusterProfiler) # GO/KEGG enrichment
-library(org.Hs.eg.db)    # annotation database
-library(randomForest)    # machine learning ranking
-
-# ---------------------------------------------------------
-# Load Expression Data
-# ---------------------------------------------------------
-expr <- read_tsv("data/fpkm_matrix.tsv") %>% 
-  column_to_rownames(1)
-
-meta <- read_tsv("data/sample_metadata.tsv")
-
-# Check sample groups
-table(meta$group)   # should show 30 tumor, 30 normal
-
-# ---------------------------------------------------------
-# Filter Low-Expression Genes
-# Keep genes expressed in at least 2 samples
-# ---------------------------------------------------------
-expr_filt <- expr[rowSums(expr > 1) >= 2, ]
-
-# ---------------------------------------------------------
-# log2 Normalize the Data
-# ---------------------------------------------------------
-logexpr <- log2(expr_filt + 1)
-
-# ---------------------------------------------------------
-# Create Design Matrix (Tumor vs Normal)
-# ---------------------------------------------------------
-group <- factor(meta$group)
-design <- model.matrix(~0 + group)
-colnames(design) <- levels(group)
-
-# ---------------------------------------------------------
-# Differential Expression using limma
-# ---------------------------------------------------------
-fit <- lmFit(logexpr, design)
-contrast <- makeContrasts(Tumor - Normal, levels = design)
-fit2 <- eBayes(contrasts.fit(fit, contrast))
-
-# Get all DEGs
-deg <- topTable(fit2, number = Inf)
-
-# Apply your project filter:
-# logFC >= 1 AND adj.p.value <= 0.01
-deg_filtered <- deg %>% 
-  filter(abs(logFC) >= 1 & adj.P.Val <= 0.01)
-
-# Total DEGs found
-nrow(deg_filtered)  # result: 1655 DEGs
-
-# Save results
-write_tsv(deg, "results/limma_top_table.tsv")
-write_tsv(deg_filtered, "results/limma_filtered_DEGs.tsv")
-
-# ---------------------------------------------------------
-# Volcano Plot
-# ---------------------------------------------------------
-volcano <- ggplot(deg, aes(logFC, -log10(adj.P.Val))) +
-  geom_point(alpha=0.7) +
-  geom_point(data=deg_filtered, aes(logFC, -log10(adj.P.Val)), color="red") +
-  theme_minimal() +
-  ggtitle("Volcano Plot of DEGs")
-
-ggsave("figures/volcano.png", volcano, width=7, height=6)
-
-# ---------------------------------------------------------
-# Heatmap of Top 20 DEGs
-# ---------------------------------------------------------
-top20 <- head(rownames(deg_filtered[order(deg_filtered$adj.P.Val), ]), 20)
-pheatmap(logexpr[top20, ],
-         scale = "row",
-         annotation_col = data.frame(Group = group),
-         filename = "figures/heatmap_top20.png")
-
-# ---------------------------------------------------------
-# Boxplot for Top 5 DEGs
-# ---------------------------------------------------------
-top5 <- rownames(deg_filtered)[1:5]
-
-box_data <- logexpr[top5, ] %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column("Gene") %>%
-  tidyr::pivot_longer(-Gene, names_to="Sample", values_to="Expression") %>%
-  left_join(meta, by="Sample")
-
-boxplot_fig <- ggplot(box_data, aes(group, Expression, fill=group)) +
-  geom_boxplot() +
-  facet_wrap(~Gene, scales="free") +
-  theme_minimal() +
-  ggtitle("Top 5 DEGs (Tumor vs Normal)")
-
-ggsave("figures/boxplot_top5.png", boxplot_fig, width=9, height=6)
-
-# ---------------------------------------------------------
-# Functional Enrichment (GO & KEGG)
-# ---------------------------------------------------------
-# Convert gene symbols → Entrez IDs
-genes <- rownames(deg_filtered)
-entrez <- bitr(genes, fromType="SYMBOL",
-               toType="ENTREZID",
-               OrgDb=org.Hs.eg.db)
-
-# GO Biological Process
-ego <- enrichGO(gene = entrez$ENTREZID,
-                OrgDb = org.Hs.eg.db,
-                ont = "BP",
-                readable = TRUE)
-
-write_tsv(as.data.frame(ego), "results/GO_enrichment.tsv")
-
-# KEGG Pathway Enrichment
-ekegg <- enrichKEGG(gene = entrez$ENTREZID,
-                    organism = "hsa")
-
-write_tsv(as.data.frame(ekegg), "results/KEGG_enrichment.tsv")
-
-# ---------------------------------------------------------
-# KEGG Pathway Map (hsa05200)
-# (Plotting handled externally using KEGG API or Pathview)
-# ---------------------------------------------------------
-# Note: Pathway image generated manually, not via code here.
-
-# ---------------------------------------------------------
-# Random Forest Gene Ranking (Optional Task)
-# ---------------------------------------------------------
-rf_data <- as.data.frame(t(logexpr[genes, ]))
-rf_data$Class <- meta$group
-
-model <- randomForest(Class ~ ., data=rf_data, importance=TRUE)
-
-importance_df <- as.data.frame(model$importance)
-importance_df <- importance_df[order(importance_df$MeanDecreaseGini, decreasing=TRUE), ]
-
-write_tsv(importance_df, "results/random_forest_gene_importance.tsv")
-
-# Plot importance of top 20 genes
-imp_plot <- ggplot(importance_df[1:20, ], aes(x=reorder(rownames(importance_df)[1:20],
-                                 MeanDecreaseGini),
-                                 y=MeanDecreaseGini)) +
-  geom_bar(stat="identity", fill="steelblue") +
-  coord_flip() +
-  theme_minimal() +
-  ggtitle("Random Forest Gene Importance")
-
-ggsave("figures/random_forest_gene_importance.png", imp_plot, width=7, height=6)
+source("scripts/install_packages.R")
 ```
+
+### 3. Run Notebook
+Open:  
+`notebook/weblem_analysis.Rmd`  
+Run all steps to reproduce results.
+
+---
+
+## 👤 **Author**
+**Khandakar Jianur Islam**
+
+---
+
+## 📄 **License**
+MIT License
